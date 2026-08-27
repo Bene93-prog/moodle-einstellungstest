@@ -56,6 +56,14 @@ RUN git clone --depth 1 --branch ${MOODLE_BRANCH} \
 # moodledata liegt AUSSERHALB des Webroots (Volume)
 RUN mkdir -p /var/moodledata && chown -R www-data:www-data /var/moodledata
 
+# config.php ins Image backen statt per Bind-Mount einhaengen.
+# Vermeidet das Portainer-Pfadproblem bei relativen Host-Bind-Mounts
+# (das geklonte Repo liegt in Portainers Volume, der Host-Docker-Dienst
+# findet den relativen Pfad nicht). config.php enthaelt keine Secrets —
+# die kommen zur Laufzeit aus den Umgebungsvariablen.
+COPY config.php /var/www/html/config.php
+RUN chown www-data:www-data /var/www/html/config.php
+
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
