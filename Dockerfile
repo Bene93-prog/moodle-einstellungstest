@@ -14,10 +14,12 @@ FROM php:${PHP_VERSION}-apache
 
 # --- Systempakete zum Bauen der von Moodle benoetigten PHP-Erweiterungen ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      git unzip ca-certificates \
+      git unzip ca-certificates locales \
       libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
       libicu-dev libxml2-dev libzip-dev libonig-dev \
       libcurl4-openssl-dev libsodium-dev libpq-dev \
+    && sed -i 's/^# *\(de_DE.UTF-8 UTF-8\)/\1/; s/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen \
+    && locale-gen \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Von Moodle geforderte / empfohlene PHP-Erweiterungen ---
