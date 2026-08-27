@@ -1,0 +1,80 @@
+name: moodle-einstellungstest
+
+services:
+
+  db:
+    image: mariadb:11.4                      # LTS, offizielles Image, gepinnt
+    restart: unless-stopped
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --innodb_file_per_table=1
+      --skip-name-resolve
+    environment:
+      MARIADB_DATABASE: ${DB_NAME}
+      MARIADB_USER: ${DB_USER}
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [backend]
+
+  moodle:
+    build:
+      context: .
+      args:
+        MOODLE_BRANCH: ${MOODLE_BRANCH}
+        PHP_VERSION: ${PHP_VERSION}
+    image: moodle-einstellungstest:${MOODLE_BRANCH}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MOODLE_DB_HOST: db
+      MOODLE_DB_NAME: ${DB_NAME}
+      MOODLE_DB_USER: ${DB_USER}
+      MOODLE_DB_PASSWORD: ${DB_PASSWORD}
+      MOODLE_WWWROOT: ${MOODLE_WWWROOT}
+      MOODLE_COOKIESECURE: ${MOODLE_COOKIESECURE}
+      MOODLE_REVERSEPROXY: ${MOODLE_REVERSEPROXY}
+      MOODLE_SSLPROXY: ${MOODLE_SSLPROXY}
+    volumes:
+      - ./config.php:/var/www/html/config.php:ro
+      - moodledata:/var/moodledata
+    ports:
+      - "8080:80"          # Hinter einen TLS-Reverse-Proxy legen (siehe Runbook)
+    networks: [backend]
+
+  # Moodle braucht zwingend einen laufenden Cron. Eigener Container,
+  # laeuft als www-data, teilt sich Code-Image + moodledata + config.php.
+  cron:
+    image: moodle-einstellungstest:${MOODLE_BRANCH}
+    restart: unless-stopped
+    depends_on:
+      moodle:
+        condition: service_started
+    user: "33:33"          # www-data
+    entrypoint: ["sh", "-c", "while true; do php /var/www/html/admin/cli/cron.php; sleep 60; done"]
+    environment:
+      MOODLE_DB_HOST: db
+      MOODLE_DB_NAME: ${DB_NAME}
+      MOODLE_DB_USER: ${DB_USER}
+      MOODLE_DB_PASSWORD: ${DB_PASSWORD}
+      MOODLE_WWWROOT: ${MOODLE_WWWROOT}
+    volumes:
+      - ./config.php:/var/www/html/config.php:ro
+      - moodledata:/var/moodledata
+    networks: [backend]
+
+volumes:
+  db_data:
+  moodledata:
+
+networks:
+  backend:
